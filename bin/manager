@@ -1,0 +1,19 @@
+#!python
+
+from __future__ import print_function
+
+import sys
+import os
+import socket
+
+def main(tunnel_name):
+    print("hello, %s" % (tunnel_name,))
+    import select
+    select.select((), (), ())
+
+if __name__ == '__main__':
+    if 'SSH_ORIGINAL_COMMAND' not in os.environ:
+        print("recommended ssh usage: ssh revdev@%s $(hostname)" % (socket.gethostname(),))
+        sys.exit(1)
+    main(os.environ['SSH_ORIGINAL_COMMAND'])
+
