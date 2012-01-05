@@ -5,15 +5,126 @@ from __future__ import print_function
 import sys
 import os
 import socket
+import errno
+from select import select
+from functools import wraps
+from collections import namedtuple
 
-def main(tunnel_name):
-    print("hello, %s" % (tunnel_name,))
-    import select
-    select.select((), (), ())
+Listener = namedtuple("Listener", "port, program")
+
+
+NGINX_CONF_TEMPLATE="""
+server {
+    access_log %(project_root)s/nginx/log/%(tunnel_name)s;
+    server_name  %(tunnel_name)s.*;
+    location / {
+        proxy_pass http://localhost:%(port)d;
+    }
+}
+"""
+
+class ManagerException(Exception):
+    pass
+class TunnelNameInUse(ManagerException):
+    def __str__(self):
+        return "this tunnel name (%s) is in use; pick another" % (self.args[0],)
+class TunnelNameInvalid(ManagerException):
+    def __str__(self):
+        return "this tunnel name (%s) is invalid; use only alphanumeric characters" % (self.args[0],)
+
+def yield_listeners():
+    for index, line in enumerate(os.popen('sudo netstat -tnlp').readlines()):
+        if index < 2:
+            continue
+        protocol, recvq, sendq, bound_local, bound_remote, state, pidprog = line.split(None, 6)
+        if protocol != "tcp":
+            continue
+        host, port = bound_local.split(':')
+        pid, program = pidprog.split('/')
+        yield pid, Listener(port, program)
+
+def detect_parent_listening_port():
+    listeners = dict((pid, listener) for pid, listener in yield_listeners())
+    assert listeners, "no listeners detected"
+    sshd_pid = str(os.getppid())
+    assert sshd_pid in listeners, 'unable to find listening sshd'
+    assert 'sshd' in listeners[sshd_pid].program, 'expected sshd to be the listening process'
+    return int(listeners[sshd_pid].port)
+
+def sleep_until_interrupted_or_stdin_closes():
+    try:
+        while True:
+            select((sys.stdin,), (), ())
+            if sys.stdin.read() == '':
+                break
+    except KeyboardInterrupt:
+        pass
+
+def write_nginx_conf(nginx_conf_location, port, tunnel_name, project_root):
+    try:
+        handle = os.fdopen(os.open(nginx_conf_location, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0444), 'w', 0)
+    except OSError, error:
+        if error.errno != errno.EEXIST:
+            raise
+        raise TunnelNameInUse()
+    with handle:
+        handle.write(NGINX_CONF_TEMPLATE % dict(port=port, tunnel_name=tunnel_name, project_root=project_root))
+
+def safe_unlink(path):
+    try:
+        os.unlink(path)
+    except:
+        pass
+
+def colorize(text, color):
+    colors = {
+        "default": (0, 1), "black": (30, 1), "red": (31, 1), "green": (32, 1), "yellow": (33, 1), "blue": (34, 1),
+        "magenta": (35, 1), "cyan": (36, 1), "white": (37, 1), "gray": (37, 0),
+    }
+    if color not in colors:
+        raise ValueError("unknown color %r" % color)
+    return "\033[%d;%dm%s\033[0m" % (colors[color][1], colors[color][0], text)
+
+def reload_nginx():
+    os.system("sudo /etc/init.d/nginx reload >/dev/null 2>/dev/null")
+
+def main_exception_handler(func):
+    @wraps(func)
+    def inner(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except ManagerException, error:
+            print(colorize(str(error), "red"))
+    return inner
+
+@main_exception_handler
+def main(tunnel_name, project_root):
+    if not tunnel_name.isalnum():
+        raise TunnelNameInvalid(tunnel_name)
+    nginx_conf_location = os.path.join(project_root, 'nginx', 'conf.d', tunnel_name + '.conf')
+    if os.path.exists(nginx_conf_location):
+        raise TunnelNameInUse(tunnel_name)
+    print(colorize("creating tunnel for %s" % (tunnel_name,), "white"))
+    port = detect_parent_listening_port()
+    print(colorize("detected listening port %s" % (port,), "gray"))
+    write_nginx_conf(nginx_conf_location, port=port, tunnel_name=tunnel_name, project_root=project_root)
+    reload_nginx()
+    print(colorize("tunnel ready", "gray"))
+    try:
+        sleep_until_interrupted_or_stdin_closes()
+        print(colorize("shutting down", "white"))
+    finally:
+        safe_unlink(nginx_conf_location)
+        reload_nginx()
 
 if __name__ == '__main__':
+    if len(sys.argv) == 2:
+        os.environ['SSH_ORIGINAL_COMMAND'] = sys.argv[1]
     if 'SSH_ORIGINAL_COMMAND' not in os.environ:
-        print("recommended ssh usage: ssh revdev@%s $(hostname)" % (socket.gethostname(),))
+        print(colorize("no tunnel name specified; try running:", "red"))
+        print(colorize("    ssh revdev@%s $(hostname)" % (socket.gethostname(),), "white"))
         sys.exit(1)
-    main(os.environ['SSH_ORIGINAL_COMMAND'])
-
+    main(
+        tunnel_name = os.environ['SSH_ORIGINAL_COMMAND'],
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    )
