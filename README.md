@@ -59,6 +59,12 @@ Note that lines that start with `server#` should be run on the server as root, l
 
     Now you can simply run `ssh revdev foo` to create tunnel foo.
 
+*   **Q:** I develop using `foreman`. Is there something totally cool you'd like to tell me?
+
+    **A:** Yeah. Stick this in your `Procfile`:
+
+        revdev: ssh -i ~/.ssh/revdev_rsa -R localhost:0:localhost:$PORT revdev@somehost.example.com $(hostname -s)
+
 *   **Q:** Isn't it insecure, publishing the private key and letting anyone ssh into the revdev server?
 
     **A:** Depends. I admit the best practice would be to run `server# rm /opt/revdev/www/key` after you got the key. But I really don't see what would anyone do with it, given that they are forced to run a particular command and can only redirect ports to their own machine.
