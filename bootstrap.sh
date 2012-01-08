@@ -32,6 +32,10 @@ if dpkg-query -W -f '${Provides}\n' | grep httpd > /dev/null; then
     exit 1
 fi
 
+if [ -n "$1" ]; then
+    REVDEV_KEY_PASSWORD="$1"
+fi
+
 # setup the revdev user
 cd $PROJECT_ROOT
 mkdir -p home/.ssh
@@ -76,6 +80,11 @@ http {
         access_log /var/log/nginx/access.log;
         listen       80 default_server;
         server_name  revdev;
+        location /key {
+            auth_basic revdev;
+            auth_basic_user_file $PROJECT_ROOT/nginx/htpasswd;
+            root $PROJECT_ROOT/www/;
+        }
         location / {
             index   index.html  index.php;
             alias   $PROJECT_ROOT/www/;
@@ -86,4 +95,5 @@ http {
 }
 
 EOF
+echo ${REVDEV_KEY_USERNAME:-revdev}:$(openssl passwd -crypt ${REVDEV_KEY_PASSWORD:-secret}) > nginx/htpasswd
 /etc/init.d/nginx start
