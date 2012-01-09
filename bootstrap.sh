@@ -78,7 +78,8 @@ http {
 
     server {
         access_log /var/log/nginx/access.log;
-        listen       80 default_server;
+        listen       8000 default_server;
+        listen       80;
         server_name  revdev;
         location /key {
             auth_basic revdev;
