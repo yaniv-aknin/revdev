@@ -98,3 +98,11 @@ http {
 EOF
 echo ${REVDEV_KEY_USERNAME:-revdev}:$(openssl passwd -crypt ${REVDEV_KEY_PASSWORD:-secret}) > nginx/htpasswd
 /etc/init.d/nginx start
+
+# configure sshd for great justice
+patch_sshd() {
+    grep "$1" /etc/ssh/sshd_config > /dev/null || echo "$1" >> /etc/ssh/sshd_config
+}
+patch_sshd "UseDNS no"
+patch_sshd "ClientAliveInterval 3"
+service ssh reload
