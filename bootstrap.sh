@@ -36,6 +36,10 @@ if [ -n "$1" ]; then
     REVDEV_KEY_PASSWORD="$1"
 fi
 
+patch_config_file() {
+    grep "$1" "$2" > /dev/null || echo "$1" >> "$2"
+}
+
 # setup the revdev user
 cd $PROJECT_ROOT
 mkdir -p home/.ssh
@@ -59,7 +63,7 @@ mkdir -p nginx/conf.d
 chown revdev:revdev nginx/conf.d
 mkdir -p nginx/log
 chown www-data nginx/log
-echo DAEMON_OPTS=\"-c $PROJECT_ROOT/nginx/nginx.conf\" >> /etc/default/nginx
+patch_config_file 'DAEMON_OPTS="-c $PROJECT_ROOT/nginx/nginx.conf"' /etc/default/nginx
 if [ -d ssl ]; then
     OPTIONAL_SSL_INCLUDE="include $PROJECT_ROOT/ssl/nginx.conf;"
     cat > ssl/nginx.conf << EOF
@@ -123,9 +127,6 @@ echo ${REVDEV_KEY_USERNAME:-revdev}:$(openssl passwd -crypt ${REVDEV_KEY_PASSWOR
 /etc/init.d/nginx start
 
 # configure sshd for great justice
-patch_sshd() {
-    grep "$1" /etc/ssh/sshd_config > /dev/null || echo "$1" >> /etc/ssh/sshd_config
-}
-patch_sshd "UseDNS no"
-patch_sshd "ClientAliveInterval 3"
+patch_config_file "UseDNS no" /etc/ssh/sshd_config
+patch_config_file "ClientAliveInterval 3" /etc/ssh/sshd_config
 service ssh reload
