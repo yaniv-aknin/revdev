@@ -128,7 +128,7 @@ http {
     }
 
     $OPTIONAL_SSL_INCLUDE
-	include $PROJECT_ROOT/nginx/conf.d/*;
+    include $PROJECT_ROOT/nginx/conf.d/*;
 }
 
 EOF
