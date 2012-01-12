@@ -60,6 +60,29 @@ chown revdev:revdev nginx/conf.d
 mkdir -p nginx/log
 chown www-data nginx/log
 echo DAEMON_OPTS=\"-c $PROJECT_ROOT/nginx/nginx.conf\" >> /etc/default/nginx
+if [ -d ssl ]; then
+    OPTIONAL_SSL_INCLUDE="include $PROJECT_ROOT/ssl/nginx.conf;"
+    cat > ssl/nginx.conf << EOF
+    ssl on;
+    ssl_certificate      $PROJECT_ROOT/ssl/certificate.crt;
+    ssl_certificate_key  $PROJECT_ROOT/ssl/key.key;
+
+    server {
+        access_log /var/log/nginx/access.log;
+        listen       443 ssl;
+        server_name  revdev;
+        location /key {
+            auth_basic revdev;
+            auth_basic_user_file $PROJECT_ROOT/nginx/htpasswd;
+            root $PROJECT_ROOT/www/;
+        }
+        location / {
+            index   index.html  index.php;
+            alias   $PROJECT_ROOT/www/;
+        }
+    }
+EOF
+fi
 cat > nginx/nginx.conf << EOF
 error_log /var/log/nginx/error.log;
 user www-data;
@@ -74,7 +97,6 @@ http {
 	tcp_nopush on;
 	tcp_nodelay on;
 	keepalive_timeout 65;
-
 
     server {
         access_log /var/log/nginx/access.log;
@@ -92,6 +114,7 @@ http {
         }
     }
 
+    $OPTIONAL_SSL_INCLUDE
 	include $PROJECT_ROOT/nginx/conf.d/*;
 }
 
