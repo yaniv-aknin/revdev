@@ -27,7 +27,23 @@ Note that lines that start with `server#` should be run on the server as root, l
 
 ## How it works? ##
 
-`nginx` is setup on the machine thus that it will load all the configuration files in `/opt/revdev/nginx/conf.d`. The generated ssh key will let you access a newly created `revdev` user, but in a limited fashion - the only thing you can do is run the `manager` script and setup reverse tunnels (from the server to your laptop). The management script, when run, will discover the port chosen for the reverse tunnel, and configure nginx to reverse proxy from the name you chose (say, `foo.somehost.example.com`) to the port. When the connection is broken, the script will clear the small configuration file.
+`nginx` is setup on the machine thus that it will load all the configuration files in `/opt/revdev/nginx/conf.d`. The generated ssh key will let you access a newly created `revdev` user, but in a limited fashion - the only thing you can do is run the `manager` script and setup reverse tunnels (from the server to your laptop). The management script, when run, will discover the port chosen for the reverse tunnel, and configure `nginx` to reverse proxy from the name you chose (say, `foo.somehost.example.com`) to the port. When the connection is broken, the script will clear the small configuration file.
+
+## SSL ##
+
+If you'd like your instance of `revdev` to support SSL, you need to supply it with a key and a certificate before bootstrapping. From the root directory of the cloned repository, do the following:
+
+    $ mkdir ssl && cd ssl
+    $ openssl req -new -nodes -keyout key.key -out certificate-request.csr
+    # answer lots of annoying questions; note that you need a wildcard certificate, so
+    #  "Common Name" is something like *.somehost.example.com
+    $ openssl x509 -req -days 365 -in certificate-request.csr -signkey key.key -out certificate.crt
+    # ...
+    $
+
+And now run `bootstrap.sh`. The bootstrap process should find your certificate and key and configure `nginx` to also serve over SSL. Sweet.
+
+(p.s.: it's up to you to configure your browser to trust this certificate, but that shan't be too hard; also, be absolutely sure you're creating a *wildcard* certificate, that's largely the point behind revdev...)
 
 ## FAQ ##
 
@@ -42,10 +58,6 @@ Note that lines that start with `server#` should be run on the server as root, l
 *   **Q:** Why is there no support for _name-of-distribution-which-isn't-Ubuntu_)?
 
     **A:** Fork this repo, fix it, send me a pull request. Also, `bootstrap.sh` is rather easy to follow, I'm pretty sure you can hack it to match your system or do a manual walkthrough of what it does on your distribution. Unless it's Windows.
-
-*   **Q:** What about SSL, to satisfy them paranoid Facebook scrapers?
-
-    **A:** Ah, great question. It's in the works (that was the idea behind `revdev` in the first place).
 
 *   **Q:** The ssh command line is so long and icky... isn't there something that can be done about it?
 

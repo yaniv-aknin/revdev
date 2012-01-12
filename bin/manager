@@ -12,16 +12,21 @@ from collections import namedtuple
 
 Listener = namedtuple("Listener", "port, program")
 
-PLAIN_LISTEN="""listen 8000;
-    listen 80;"""
+PLAIN_PREAMBLE="""
+    listen 8000;
+    listen 80;
+"""
 
-SECURE_LISTEN="listen 443 ssl;"
+SECURE_PREAMBLE="""
+    ssl on;
+    listen 443 ssl;
+"""
 
-NGINX_CONF_TEMPLATE="""
+NGINX_SERVER_BLOCK="""
 server {
+    %(preamble)s
     access_log %(project_root)s/nginx/log/%(tunnel_name)s;
     server_name ~^(.*\.)?%(tunnel_name)s\.revdev\..*$;
-    %(listen_string)s;
     location / {
         proxy_pass http://localhost:%(port)d;
         proxy_set_header Host $host;
@@ -79,9 +84,9 @@ def write_nginx_conf(nginx_conf_location, port, tunnel_name, project_root):
         raise TunnelNameInUse()
     context = dict(port=port, tunnel_name=tunnel_name, project_root=project_root)
     with handle:
-        handle.write(NGINX_CONF_TEMPLATE % dict(context, listen_string=PLAIN_LISTEN))
+        handle.write(NGINX_SERVER_BLOCK % dict(context, preamble=PLAIN_PREAMBLE))
         if os.path.exists(os.path.join(project_root, 'ssl')):
-            handle.write(NGINX_CONF_TEMPLATE % dict(context, listen_string=SECURE_LISTEN))
+            handle.write(NGINX_SERVER_BLOCK % dict(context, preamble=SECURE_PREAMBLE))
 
 def safe_unlink(path):
     try:
