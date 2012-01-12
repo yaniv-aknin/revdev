@@ -28,8 +28,14 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 if dpkg-query -W -f '${Provides}\n' | grep httpd > /dev/null; then
-    echo "it appears you already have a webserver on this system; cowardly aborting"
-    exit 1
+    if [ -n "$IDEMPOTENT" ]; then
+        echo "removing your existing nginx"
+        apt-get --assume-yes purge nginx-full
+        apt-get --assume-yes autoremove
+    else
+        echo "it appears you already have a webserver on this system; cowardly aborting"
+        exit 1
+    fi
 fi
 
 if [ -n "$1" ]; then
@@ -43,7 +49,10 @@ patch_config_file() {
 # setup the revdev user
 cd $PROJECT_ROOT
 mkdir -p home/.ssh
-ssh-keygen -f home/.ssh/id_rsa -N '' -q
+[ ! -f home/.ssh/id_rsa ] && ssh-keygen -f home/.ssh/id_rsa -N '' -q
+if [ -n "$IDEMPOTENT" ] && id revdev 2> /dev/null; then
+    userdel revdev
+fi
 useradd revdev -d $PROJECT_ROOT/home/ -M -s /bin/sh -r
 echo -n "permitopen=\"127.0.0.1:1\",command=\"exec /usr/bin/python -u $PROJECT_ROOT/bin/manager\" " > home/.ssh/authorized_keys
 cat home/.ssh/id_rsa.pub >> home/.ssh/authorized_keys
@@ -63,7 +72,7 @@ mkdir -p nginx/conf.d
 chown revdev:revdev nginx/conf.d
 mkdir -p nginx/log
 chown www-data nginx/log
-patch_config_file 'DAEMON_OPTS="-c $PROJECT_ROOT/nginx/nginx.conf"' /etc/default/nginx
+patch_config_file "DAEMON_OPTS=\"-c $PROJECT_ROOT/nginx/nginx.conf\"" /etc/default/nginx
 if [ -d ssl ]; then
     OPTIONAL_SSL_INCLUDE="include $PROJECT_ROOT/ssl/nginx.conf;"
     cat > ssl/nginx.conf << EOF
