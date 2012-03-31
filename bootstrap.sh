@@ -130,3 +130,28 @@ echo ${REVDEV_KEY_USERNAME:-revdev}:$(openssl passwd -crypt ${REVDEV_KEY_PASSWOR
 patch_config_file "UseDNS no" /etc/ssh/sshd_config
 patch_config_file "ClientAliveInterval 3" /etc/ssh/sshd_config
 service ssh reload
+
+set +ex
+cat << EOF
+
+
+
+
+REVDEV INSTALLED SUCCESSFULLY (at least, I think).
+
+Assuming you'd like this revdev server to be called revdev.mydomain.com, that its IP is 1.2.3.4 and that you'd like your development machine to be accessible at mylaptop.revdev.mydomain.com, you will need to do the following:
+
+1. Make sure these DNS records are in place:
+    revdev    IN  A      1.2.3.4
+    *.revdev  IN  CNAME  revdev.mydomain.com.
+
+2. Run the following commands on your laptop:
+    wget http://revdev:secret@revdev.mydomin.com/key -O ~/.ssh/revdev_rsa
+    chmod 600 ~/.ssh/revdev_rsa
+    ssh -i ~/.ssh/revdev_rsa -R localhost:0:localhost:8000 revdev@revdev.mydomain.com mylaptop
+
+3. Open a browser and direct it to http://mylaptop.revdev.mydomain.com. You're done!
+
+Comments? Questions? Head over to https://github.com/yaniv-aknin/revdev and be social :)
+
+EOF
